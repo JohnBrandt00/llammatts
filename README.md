@@ -136,3 +136,14 @@ data/                models / output / speakers / history — created on first r
 [OuteAI](https://huggingface.co/OuteAI) for OuteTTS 1.0 and the DAC ONNX export · [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) · [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp) · [MoonSharp](https://www.moonsharp.org/) · [IBM Research](https://huggingface.co/ibm-research/DAC.speech.v1.0) for the DAC speech codec · GGUF quants mirrored by [aoiandroid](https://huggingface.co/aoiandroid/Llama-OuteTTS-1.0-1B-GGUF).
 
 > Check the [model card](https://huggingface.co/OuteAI/Llama-OuteTTS-1.0-1B) for the model's own license terms before shipping audio commercially. Clone only voices you have the right to clone.
+
+
+
+
+â¯ make me a C# app that uses llamacpp (embed it?, build it on the side?)        
+  https://huggingface.co/aoiandroid/Llama-OuteTTS-1.0-1B-GGUF                   
+                                                                                
+  to use llamatts in C#. add a lua plugin system so i can write lua scripts to  
+  control and produce tts or clone a voice.                                     
+                                                                                
+  make a asp.net web ui to see how its working and what its done.  
