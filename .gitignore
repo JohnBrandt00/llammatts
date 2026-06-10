@@ -1,0 +1,14 @@
+# build output
+bin/
+obj/
+.vs/
+*.user
+
+# runtime data: downloaded models (~1 GB), generated audio, speaker profiles, job history
+data/
+
+# local assistant settings
+.claude/
+
+# third-party reference sources (OuteTTS python files used while porting)
+reference/

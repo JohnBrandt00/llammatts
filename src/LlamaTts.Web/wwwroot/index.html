@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LlamaTTS Studio</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>🦙 Llama<span>TTS</span></h1>
+  <nav>
+    <button data-tab="dashboard" class="active">Dashboard</button>
+    <button data-tab="studio">Studio</button>
+    <button data-tab="jobs">Jobs</button>
+    <button data-tab="library">Library</button>
+    <button data-tab="speakers">Speakers</button>
+    <button data-tab="plugins">Plugins</button>
+    <button data-tab="logs">Logs</button>
+  </nav>
+  <span id="sse-dot" class="dot" title="live connection"></span>
+  <div id="engine-badge" class="badge">…</div>
+  <button id="theme-toggle" class="icon-btn" title="toggle theme">◐</button>
+</header>
+
+<main>
+
+<!-- ============================ Dashboard ============================ -->
+<section id="tab-dashboard" class="tab active">
+  <div class="statgrid">
+    <div class="stat-card">
+      <div class="stat-label">Engine</div>
+      <div class="stat-value" id="st-engine">…</div>
+      <button id="btn-engine-load" class="small hidden">load now</button>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Models</div>
+      <div class="stat-value" id="st-models">…</div>
+      <button id="btn-download" class="small hidden">⬇ download (~1.1 GB)</button>
+      <div id="download-progress"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Audio generated</div>
+      <div class="stat-value" id="st-audio">–</div>
+      <div class="stat-sub" id="st-jobs-done"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last speed</div>
+      <div class="stat-value" id="st-speed">–</div>
+      <div class="stat-sub" id="st-rt"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Memory</div>
+      <div class="stat-value" id="st-mem">–</div>
+      <div class="stat-sub" id="st-uptime"></div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Generation history <span class="hint">(seconds of audio per job)</span></h2>
+      <canvas id="chart" height="120"></canvas>
+    </div>
+    <div class="card">
+      <h2>Model files</h2>
+      <div id="model-files" class="hint">–</div>
+      <p class="hint">root: <code id="root-dir"></code> · quant <span id="quant-label"></span> · gpu layers <span id="gpu-label"></span></p>
+    </div>
+  </div>
+
+  <h2>Recent output</h2>
+  <div id="recent-outputs" class="stack"></div>
+</section>
+
+<!-- ============================ Studio ============================ -->
+<section id="tab-studio" class="tab">
+  <div class="studio-grid">
+    <div class="card">
+      <div class="seg" id="mode-seg">
+        <button data-mode="single" class="active">Single text</button>
+        <button data-mode="dialogue">Dialogue script</button>
+      </div>
+
+      <div id="single-panel">
+        <label for="gen-text">Text</label>
+        <textarea id="gen-text" rows="7">The lighthouse keeper had one rule: never answer a knock after midnight. Tonight, someone was knocking.</textarea>
+        <div class="counter-row hint" id="text-stats"></div>
+        <div class="row">
+          <div>
+            <label>Speaker</label>
+            <select id="gen-speaker"></select>
+          </div>
+          <div>
+            <label>Takes (different seeds, A/B them)</label>
+            <div class="seg" id="takes-seg">
+              <button class="active">1</button><button>2</button><button>3</button><button>4</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialogue-panel" class="hidden">
+        <label for="dlg-text">Script — one line per cue, <code>Name: text</code></label>
+        <textarea id="dlg-text" rows="8" placeholder="Narrator: The rain had stopped by the time she reached the station.
+Mia: You came after all.
+Ben: I said I would, didn't I?"></textarea>
+        <div id="dlg-roles"></div>
+        <div class="row">
+          <label class="inline">pause between lines
+            <input type="range" id="dlg-gap" min="0" max="1.5" step="0.1" value="0.4">
+            <output id="dlg-gap-val">0.4s</output>
+          </label>
+          <label class="inline check"><input type="checkbox" id="dlg-concat" checked> stitch into one file</label>
+        </div>
+      </div>
+
+      <details id="sampler-details">
+        <summary>Sampler (OuteTTS 1.0 defaults)</summary>
+        <div class="sliders">
+          <label class="slider">temperature
+            <input type="range" id="s-temp" min="0.05" max="1.5" step="0.05" value="0.4"><output>0.4</output>
+          </label>
+          <label class="slider">repetition penalty
+            <input type="range" id="s-rep" min="1" max="1.5" step="0.01" value="1.1"><output>1.1</output>
+          </label>
+          <label class="slider">top_p
+            <input type="range" id="s-topp" min="0.1" max="1" step="0.05" value="0.9"><output>0.9</output>
+          </label>
+          <label class="slider">min_p
+            <input type="range" id="s-minp" min="0" max="0.3" step="0.01" value="0.05"><output>0.05</output>
+          </label>
+          <label class="slider">top_k
+            <input type="range" id="s-topk" min="1" max="100" step="1" value="40"><output>40</output>
+          </label>
+          <label class="slider seedrow">seed
+            <input type="number" id="s-seed" value="0" min="0" step="1">
+            <button id="seed-dice" class="small" title="random seed">🎲</button>
+            <button id="sampler-reset" class="small" title="reset to defaults">reset</button>
+          </label>
+        </div>
+        <p class="hint">Repetition penalty is windowed to the last 64 tokens, as OuteTTS 1.0 requires.</p>
+      </details>
+
+      <button id="btn-generate" class="primary big">▶ Generate</button>
+    </div>
+
+    <div class="studio-right">
+      <div class="card" id="live-card">
+        <h2>Live</h2>
+        <div id="live-status" class="hint">idle — nothing running</div>
+        <div class="progressbar"><div id="live-bar" style="width:0%"></div></div>
+        <div id="live-meta" class="hint"></div>
+      </div>
+      <div class="card">
+        <h2>Results</h2>
+        <div id="results" class="stack"><p class="hint">Generated takes appear here with waveforms.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ Jobs ============================ -->
+<section id="tab-jobs" class="tab">
+  <h2>Job queue &amp; history</h2>
+  <div id="jobs-list"></div>
+</section>
+
+<!-- ============================ Library ============================ -->
+<section id="tab-library" class="tab">
+  <div class="lib-toolbar">
+    <input type="text" id="lib-search" placeholder="filter files…">
+    <span id="lib-stats" class="hint"></span>
+    <span class="spacer"></span>
+    <button id="lib-select-all" class="small">select all</button>
+    <label class="inline">gap
+      <input type="range" id="lib-gap" min="0" max="2" step="0.1" value="0.3">
+      <output id="lib-gap-val">0.3s</output>
+    </label>
+    <button id="lib-concat" class="small">⛓ stitch selected</button>
+    <button id="lib-delete" class="small danger">🗑 delete selected</button>
+  </div>
+  <div id="lib-list" class="stack"></div>
+</section>
+
+<!-- ============================ Speakers ============================ -->
+<section id="tab-speakers" class="tab">
+  <div class="cards">
+    <div class="card">
+      <h2>Clone a voice</h2>
+      <div class="seg" id="clone-seg">
+        <button data-src="upload" class="active">Upload wav</button>
+        <button data-src="record">Record mic</button>
+      </div>
+
+      <div id="clone-upload">
+        <label>Reference audio — clean speech, 5–15 s, one person
+          <input type="file" id="clone-file" accept=".wav,audio/wav"></label>
+      </div>
+
+      <div id="clone-record" class="hidden">
+        <div class="rec-row">
+          <button id="btn-record" class="primary">● record</button>
+          <canvas id="rec-meter" width="160" height="34"></canvas>
+          <span id="rec-time" class="hint">0.0s</span>
+        </div>
+        <div id="rec-preview" class="stack"></div>
+      </div>
+
+      <label>Transcript — <em>exactly</em> what is said
+        <textarea id="clone-transcript" rows="3" placeholder="Exact words spoken in the recording…"></textarea></label>
+      <label>Speaker name <input type="text" id="clone-name" placeholder="my-voice"></label>
+      <button id="btn-clone" class="primary">Clone voice</button>
+      <div id="clone-result"></div>
+    </div>
+
+    <div class="card">
+      <h2>Saved speakers</h2>
+      <div id="speakers-list"></div>
+      <p class="hint">Speaker JSONs are OuteTTS-v3 compatible — profiles made with the official python
+      library (Whisper-aligned) drop straight into <code>data\speakers</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ Plugins ============================ -->
+<section id="tab-plugins" class="tab">
+  <div class="plugins-grid">
+    <div class="card">
+      <h2>Lua plugins
+        <button id="btn-new-plugin" class="small" title="new plugin">＋ new</button>
+        <button id="btn-reload-plugins" class="small" title="rescan plugins directory">⟳</button>
+      </h2>
+      <div id="plugins-list"></div>
+      <details>
+        <summary>API cheat sheet</summary>
+        <pre class="hint api-ref">tts.speak(text [, speaker])
+tts.generate{ text=, speaker=, temperature=,
+  top_k=, top_p=, min_p=, seed=, file= }
+speakers.list() / .load(name) / .default()
+speakers.clone{ audio=, transcript=, name= }
+speakers.preview(name [, file])
+audio.concat({f1, f2}, out) / audio.silence(sec)
+log.info/warn/error(msg) · print(...)
+json.encode(t) / json.decode(s)
+app.output_dir · app.speakers_dir
+-- hooks: on_load() · run()
+-- on_generate_start(ev) · on_generate_complete(ev)</pre>
+      </details>
+    </div>
+    <div class="card">
+      <h2 id="plugin-editor-title">Editor <span class="hint">Ctrl+S save · Ctrl+Enter run</span></h2>
+      <div id="lua-editor"></div>
+      <div class="row">
+        <button id="btn-plugin-save" class="primary">💾 Save &amp; reload</button>
+        <button id="btn-plugin-run" class="primary">▶ Run</button>
+        <span class="spacer"></span>
+        <button id="btn-plugin-delete" class="small danger">delete plugin</button>
+      </div>
+      <h3>Output</h3>
+      <pre id="plugin-output" class="console"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ Logs ============================ -->
+<section id="tab-logs" class="tab">
+  <div class="lib-toolbar">
+    <div class="seg" id="log-filter">
+      <button data-level="all" class="active">all</button>
+      <button data-level="info">info</button>
+      <button data-level="warn">warn</button>
+      <button data-level="error">error</button>
+    </div>
+    <label class="inline check"><input type="checkbox" id="log-scroll" checked> autoscroll</label>
+    <span class="spacer"></span>
+    <button id="log-clear" class="small">clear view</button>
+  </div>
+  <pre id="log-view" class="console tall"></pre>
+</section>
+
+</main>
+
+<div id="toasts"></div>
+
+<script src="waveform.js"></script>
+<script src="recorder.js"></script>
+<script src="lua-editor.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
