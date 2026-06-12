@@ -20,6 +20,7 @@
   </nav>
   <span id="sse-dot" class="dot" title="live connection"></span>
   <div id="engine-badge" class="badge">…</div>
+  <a href="/console.html" class="icon-btn" title="MCRN ship console" style="display:grid;place-items:center;text-decoration:none">⬡</a>
   <button id="theme-toggle" class="icon-btn" title="toggle theme">◐</button>
 </header>
 
@@ -188,13 +189,13 @@ Ben: I said I would, didn't I?"></textarea>
     <div class="card">
       <h2>Clone a voice</h2>
       <div class="seg" id="clone-seg">
-        <button data-src="upload" class="active">Upload wav</button>
+        <button data-src="upload" class="active">Upload wav / mp3</button>
         <button data-src="record">Record mic</button>
       </div>
 
       <div id="clone-upload">
-        <label>Reference audio — clean speech, 5–15 s, one person
-          <input type="file" id="clone-file" accept=".wav,audio/wav"></label>
+        <label>Reference audio — clean speech, 5–15 s, one person (<span id="clone-limit">20</span>s max)
+          <input type="file" id="clone-file" accept=".wav,.mp3,audio/wav,audio/mpeg"></label>
       </div>
 
       <div id="clone-record" class="hidden">

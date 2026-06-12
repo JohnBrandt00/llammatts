@@ -28,7 +28,7 @@
 | | |
 |---|---|
 | 🦙 **llama.cpp, embedded** | The GGUF model runs **in-process** via LLamaSharp — no server to babysit, no subprocess. Loads once, stays resident. |
-| 🎙️ **Voice cloning** | Upload a wav — or **record straight from your mic** — plus a transcript, and get a reusable speaker profile. Profiles are OuteTTS-v3 compatible JSON. |
+| 🎙️ **Voice cloning** | Upload a **wav or mp3** — or **record straight from your mic** — plus a transcript, and get a reusable speaker profile. Profiles are OuteTTS-v3 compatible JSON. |
 | 🌙 **Lua plugin engine** | Script generations, batch jobs, and voice cloning in sandboxed Lua. Plugins get event hooks for *every* generation in the app — edit them live in the browser with syntax highlighting. |
 | 🎛️ **Web studio** | Waveform players, multi-take A/B generation with different seeds, a **dialogue mode** that casts a different voice per character and stitches the scene into one file. |
 | 📡 **Live everything** | Server-sent events stream job progress, tokens/sec, and logs into the UI in real time. Job history survives restarts. |
@@ -44,7 +44,7 @@ dotnet run --project src\LlamaTts.Web
 
 Open the printed URL, hit **⬇ download** on the dashboard (~1.1 GB: the GGUF + the DAC codec, straight from Hugging Face into `data/models`), then head to the **Studio** and press **▶ Generate**. The model loads on first use and stays warm.
 
-> **GPU:** add the `LLamaSharp.Backend.Cuda12` NuGet package to `LlamaTts.Web` and set `"LlamaTts:GpuLayers": 99` in `appsettings.json`. On a plain desktop CPU the 1B Q4_K_M model already runs at ~40 tok/s ≈ **4× faster than realtime**.
+> **GPU:** the CUDA 12 backend ships in the project — on an NVIDIA card the model is offloaded automatically (`GpuLayers` defaults to 99) and generation runs many times faster than realtime. No NVIDIA GPU? It silently falls back to CPU, where the 1B Q4_K_M still does ~40 tok/s ≈ **4× faster than realtime**. AMD users can swap in `LLamaSharp.Backend.Vulkan`.
 
 ## 🧠 How it works
 
@@ -116,10 +116,14 @@ Full API: `tts.speak / tts.generate{}`, `speakers.list / load / clone{} / previe
 
 | Key | Default | What it does |
 |---|---|---|
-| `LlamaTts:Quant` | `Q4_K_M` | GGUF quantization to download/run (`Q2_K` … `Q8_0`, `FP16`) |
-| `LlamaTts:GpuLayers` | `0` | Layers to offload to GPU (needs a CUDA/Vulkan LLamaSharp backend) |
+| `LlamaTts:Quant` | `Q4_K_M` | GGUF quantization to download/run (`Q2_K` … `Q8_0`, `FP16`) — on GPU, treat yourself to `Q8_0` or `FP16` |
+| `LlamaTts:GpuLayers` | `99` | Layers to offload to GPU (CUDA 12 backend included; ignored on CPU) |
 | `LlamaTts:ContextSize` | `8192` | llama.cpp context size |
+| `LlamaTts:MaxCloneSeconds` | `20` | Reference-clip ceiling for cloning (hard-capped so the profile still fits the context) |
+| `LlamaTts:ModelUrl` / `ModelFile` | – | Run any other v3-interface GGUF, e.g. the smaller [OuteTTS-1.0-0.6B](https://huggingface.co/OuteAI/OuteTTS-1.0-0.6B-GGUF) |
 | `LlamaTts:RootDir` | auto | Where `data/` and `plugins/` live |
+
+**Why is cloning capped at ~20 s?** The speaker profile isn't "training" — its audio codes are replayed into the model's context as a prefix on *every* generation, at ~165 tokens per second of reference. A 45 s clip would burn ~7,400 of the 8,192-token context and leave almost no room for the speech you asked for (and OuteTTS was trained on short references, so quality peaks around 10–15 s anyway). Use the cleanest 10–15 seconds you have; raise `MaxCloneSeconds` only if you like living dangerously.
 
 ## 🗂️ Layout
 

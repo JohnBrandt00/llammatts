@@ -16,18 +16,31 @@ public static class SpeakerFactory
 {
     public sealed record WordTiming(string Word, double StartSeconds, double EndSeconds);
 
+    /// <summary>
+    /// Default reference-clip ceiling, matching the official OuteTTS library. The profile's audio
+    /// codes are replayed as a prompt prefix at ~165 tokens per second of reference audio, so long
+    /// clips eat the 8192-token context that generation needs — and the model was trained on short
+    /// references, so more audio past ~15s hurts rather than helps.
+    /// </summary>
     public const double MaxSeconds = 20.0;
+
+    /// <summary>Absolute ceiling: leave at least ~1500 tokens of context for the generated speech.</summary>
+    public static double HardMaxSeconds(int contextSize = 8192) => Math.Max(5, (contextSize - 1500) / 165.0);
 
     /// <summary>Create a speaker profile from mono 24 kHz reference audio and its transcript.</summary>
     public static Speaker CreateFromAudio(
         float[] audio24kMono,
         string transcript,
         DacCodec codec,
-        IReadOnlyList<WordTiming>? timings = null)
+        IReadOnlyList<WordTiming>? timings = null,
+        double maxSeconds = MaxSeconds)
     {
         double seconds = (double)audio24kMono.Length / DacCodec.SampleRate;
-        if (seconds > MaxSeconds)
-            throw new ArgumentException($"Reference audio is {seconds:F1}s long; use a clip of at most {MaxSeconds:F0}s (10-15s works best).");
+        if (seconds > maxSeconds)
+            throw new ArgumentException(
+                $"Reference audio is {seconds:F1}s long; the limit is {maxSeconds:F0}s (10-15s works best). " +
+                "Long clips don't improve cloning — the reference is replayed into the model's context on every " +
+                "generation, so the longer it is, the less room is left for actual speech.");
         if (seconds < 1.0)
             throw new ArgumentException("Reference audio is too short; use a clip of a few seconds.");
 
@@ -86,15 +99,25 @@ public static class SpeakerFactory
         };
     }
 
-    /// <summary>Create a speaker from a WAV file (any common PCM/float format; resampled to 24 kHz mono).</summary>
+    /// <summary>Create a speaker from a WAV or MP3 file (resampled to 24 kHz mono).</summary>
+    public static Speaker CreateFromFile(
+        string audioPath,
+        string transcript,
+        DacCodec codec,
+        IReadOnlyList<WordTiming>? timings = null,
+        double maxSeconds = MaxSeconds)
+    {
+        return CreateFromAudio(AudioLoader.LoadMono24k(audioPath), transcript, codec, timings, maxSeconds);
+    }
+
+    /// <summary>Kept for compatibility; use CreateFromFile.</summary>
     public static Speaker CreateFromWavFile(
         string wavPath,
         string transcript,
         DacCodec codec,
         IReadOnlyList<WordTiming>? timings = null)
     {
-        var wav = WavFile.Read(wavPath);
-        return CreateFromAudio(wav.ToMono24k(), transcript, codec, timings);
+        return CreateFromFile(wavPath, transcript, codec, timings);
     }
 
     /// <summary>

@@ -334,7 +334,7 @@ public sealed class LuaPluginHost
 
                 plugin.AppendOutput($"cloning voice from {Path.GetFileName(audioPath)}...");
                 var codec = _app.GetPipeline().Codec;
-                var speaker = SpeakerFactory.CreateFromWavFile(audioPath, transcript, codec);
+                var speaker = SpeakerFactory.CreateFromFile(audioPath, transcript, codec, maxSeconds: _app.MaxCloneSeconds);
                 var savePath = Path.Combine(_app.SpeakersDir, SanitizeName(name) + ".json");
                 speaker.Save(savePath);
                 plugin.AppendOutput($"saved speaker '{name}'");

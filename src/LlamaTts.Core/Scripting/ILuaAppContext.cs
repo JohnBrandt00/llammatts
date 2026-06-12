@@ -15,6 +15,9 @@ public interface ILuaAppContext
     string SpeakersDir { get; }
     string PluginsDir { get; }
 
+    /// <summary>Maximum reference-clip length for voice cloning, in seconds.</summary>
+    double MaxCloneSeconds { get; }
+
     void Log(string level, string message);
 
     /// <summary>Resolve "default", a saved speaker name, or a path to a speaker JSON. Null/empty -> default speaker.</summary>

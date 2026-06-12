@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLAMATTS // SYSTEM MONITOR</title>
+<style>
+/* ============================================================ fonts */
+@font-face {
+  font-family: "Michroma";
+  src: url("/fonts/michroma.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Share Tech Mono";
+  src: url("/fonts/sharetechmono.woff2") format("woff2");
+  font-display: swap;
+}
+
+/* ============================================================ palette */
+:root {
+  --bg: #040810;
+  --panel: rgba(9, 20, 33, .72);
+  --panel2: rgba(13, 28, 44, .85);
+  --line: #1d4a63;
+  --line-bright: #2e7396;
+  --cyan: #6fd9f7;
+  --cyan-dim: #3f88a8;
+  --cyan-pale: #b4e9fb;
+  --crimson: #6e1f2c;
+  --crimson-line: #a23044;
+  --crimson-text: #f0cfd4;
+  --red: #e8404f;
+  --amber: #e9b44c;
+  --amber-dim: #9a7836;
+  --green: #46d977;
+  --green-dim: #2c7d49;
+  --grey-cell: #3c4a59;
+  --orange: #f08a4b;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+html, body { height: 100%; }
+body {
+  background:
+    radial-gradient(1200px 600px at 70% -10%, rgba(47, 105, 143, .16), transparent 60%),
+    radial-gradient(900px 500px at 10% 110%, rgba(47, 105, 143, .10), transparent 60%),
+    var(--bg);
+  color: var(--cyan-pale);
+  font-family: "Michroma", "Eurostile", sans-serif;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  overflow-x: hidden;
+}
+
+/* The show's panels are flat — no scanline texture, just dark glass. */
+
+a { color: inherit; text-decoration: none; }
+
+/* ============================================================ chrome */
+.topline {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  padding: 10px 18px 4px;
+  border-bottom: 1px solid var(--line);
+  margin: 0 12px;
+}
+.idcode {
+  font-size: 8.5px; color: var(--cyan-dim); letter-spacing: .22em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.idcode b { color: var(--cyan); font-weight: normal; }
+
+.grid {
+  display: grid;
+  grid-template-columns: 240px 1fr 270px 330px;
+  gap: 14px;
+  padding: 14px 24px 6px;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+@media (max-width: 1500px) { .grid { grid-template-columns: 230px 1fr 320px; } .schem { display: none; } }
+@media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } .left { order: 3; } }
+@media (max-width: 760px)  { .grid { grid-template-columns: 1fr; } }
+
+.col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* ============================================================ shared bits */
+.banner {
+  background: #6e2230;
+  border: 1px solid var(--crimson-line);
+  color: var(--crimson-text);
+  padding: 6px 12px 5px;
+  font-size: 10.5px;
+  letter-spacing: .24em;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 12px;
+  position: relative;
+}
+.panel-label {
+  font-size: 8.5px; color: var(--cyan-dim); letter-spacing: .22em;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 5px; margin-bottom: 9px;
+}
+
+/* green corner accent (Razorback panels) */
+.tick { position: relative; }
+.tick::before {
+  content: ""; position: absolute; left: -1px; top: 8px;
+  width: 3px; height: 22px;
+  background: var(--green);
+}
+
+/* chamfered corner brackets */
+.brackets { position: relative; }
+.brackets::before, .brackets::after {
+  content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+}
+.brackets::before { left: -1px; top: -1px; border-left: 2px solid var(--cyan-dim); border-top: 2px solid var(--cyan-dim); }
+.brackets::after { right: -1px; bottom: -1px; border-right: 2px solid var(--cyan-dim); border-bottom: 2px solid var(--cyan-dim); }
+
+.glow { text-shadow: 0 0 6px rgba(111, 217, 247, .3); }
+
+/* ============================================================ left column */
+.redbtn {
+  display: block;
+  background: #481420;
+  border: 1px solid #7e2333;
+  color: #edb9c1;
+  padding: 8px 12px;
+  margin-bottom: 7px;
+  font-size: 10px;
+  letter-spacing: .18em;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.redbtn:hover {
+  background: #7c2433;
+  color: #ffe2e7;
+  border-color: #c43d52;
+}
+
+.shipname {
+  font-size: 25px; letter-spacing: .12em; color: #eef7fb;
+  text-align: center; margin-top: 6px;
+  text-shadow: 0 0 8px rgba(111, 217, 247, .25);
+}
+.civ {
+  text-align: center; font-size: 9px; color: var(--cyan-dim);
+  letter-spacing: .2em; border-bottom: 1px solid var(--line);
+  padding-bottom: 10px; margin: 6px 0 10px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.statuslist div {
+  display: flex; justify-content: space-between; gap: 8px;
+  padding: 3.5px 2px; font-size: 9.5px; color: #d7c89e;
+}
+.statuslist div span { white-space: nowrap; }
+.statuslist b {
+  font-weight: normal; letter-spacing: .15em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.statuslist .ok { color: var(--amber); }
+.statuslist .good { color: var(--green); }
+.statuslist .na { color: #5a6878; }
+.statuslist .bad { color: var(--red); }
+
+.mirrorbox {
+  border: 1px solid var(--line);
+  margin-top: 10px; padding: 8px 10px;
+  font-size: 9px;
+}
+.mirrorbox .l1 { color: #d7c89e; letter-spacing: .14em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mirrorbox .l1 span { color: var(--amber); }
+.mirrorbox .l2 { color: #f3f8fb; font-size: 11px; margin-top: 4px; letter-spacing: .16em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.bigfoot {
+  border: 1px solid var(--line-bright);
+  background: var(--panel);
+  text-align: center;
+  font-size: 21px;
+  letter-spacing: .22em;
+  padding: 16px 8px;
+  color: #eef7fb;
+  text-shadow: 0 0 8px rgba(111, 217, 247, .25);
+}
+.bigfoot.lost { color: var(--red); border-color: #8c2738; text-shadow: none; }
+
+/* ============================================================ center column */
+.montitle {
+  text-align: center; font-size: 22px; color: #f0f7fa;
+  letter-spacing: .18em; font-weight: normal;
+  margin-top: 2px;
+}
+.alertbar {
+  margin: 8px auto 4px;
+  width: 64%;
+  text-align: center;
+  background: linear-gradient(180deg, #8c2433, #6e1f2c);
+  border: 1px solid var(--crimson-line);
+  color: #f6dde1;
+  font-size: 10px; letter-spacing: .34em;
+  padding: 4px 0 3px;
+}
+.alertbar.nominal { background: linear-gradient(180deg, #14384b, #0e2a3a); border-color: var(--line-bright); color: var(--cyan); }
+
+.alertlines {
+  font-family: "Share Tech Mono", monospace;
+  text-transform: none;
+  font-size: 12px;
+  color: #cfe9f5;
+  padding: 8px 10px 2px;
+  min-height: 74px;
+  letter-spacing: 0;
+}
+.alertlines div { padding: 1.5px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alertlines .warn { color: var(--amber); }
+.alertlines .err { color: var(--red); }
+
+/* synthesis task list */
+.tasks {
+  margin: 8px 0 0; border: 1px solid var(--line);
+  padding: 10px 12px; background: var(--panel);
+}
+.cell {
+  width: 18px; height: 11px; flex: none;
+  background: var(--grey-cell);
+  border-radius: 1.5px;
+}
+.cell.on { background: #3fb9dd; }
+.cell.hot { background: var(--orange); }
+.cell.dim { background: #20303e; }
+.cell.blink { animation: cellblink 1s steps(2) infinite; }
+@keyframes cellblink { 50% { opacity: .35; } }
+
+.task-row {
+  display: flex; align-items: center; gap: 10px;
+  font-family: "Share Tech Mono", monospace;
+  text-transform: none; letter-spacing: 0;
+  font-size: 12px; color: #c8e6f2;
+  padding: 3px 5px;
+  min-width: 0;
+}
+.task-row .tid { color: var(--cyan-dim); flex: none; }
+.task-row .tdesc { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-row .tdur { flex: none; width: 56px; text-align: right; color: var(--amber); }
+.task-row .tstat { flex: none; width: 76px; text-align: right; font-size: 10px; color: var(--cyan-dim); letter-spacing: .1em; }
+.task-row.err .tstat { color: var(--red); }
+.task-row.run .tstat { color: var(--cyan); }
+.task-row.playable { cursor: pointer; }
+.task-row.playable:hover { background: rgba(63, 185, 221, .09); }
+.task-row.playable:hover .tdesc::after { content: "  ▸ play"; color: var(--cyan); }
+.tasks .empty { font-family: "Share Tech Mono", monospace; text-transform: none; color: var(--cyan-dim); font-size: 12px; padding: 4px; }
+
+/* number clusters */
+.numbers {
+  display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;
+  margin-top: 12px;
+}
+.numcluster {
+  border: 1px solid var(--line);
+  padding: 7px 12px 6px;
+  text-align: center;
+  position: relative;
+  background: var(--panel);
+}
+.numcluster .nval {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 19px; color: #ecf6fa;
+  letter-spacing: .05em;
+}
+.numcluster .nlab { font-size: 7.5px; color: var(--cyan-dim); letter-spacing: .2em; margin-top: 3px; }
+
+.chev { text-align: center; color: #8fb9ca; font-size: 15px; margin: 10px 0 2px; opacity: .6; }
+
+/* ============================================================ schematic column */
+.schem .panel { flex: 1; display: flex; flex-direction: column; }
+.schem svg { width: 100%; flex: 1; }
+.callout {
+  fill: none;
+}
+.schemtable {
+  font-family: "Share Tech Mono", monospace;
+  text-transform: none;
+  font-size: 10.5px; color: #9fc4d4;
+  border-top: 1px solid var(--line);
+  margin-top: 8px; padding-top: 7px;
+  letter-spacing: 0;
+}
+.schemtable div { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
+.schemtable span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.schemtable span:last-child { color: var(--cyan); flex: none; }
+
+/* ============================================================ right column */
+.alert-frame { margin: 4px auto 10px; width: 86%; }
+.alert-frame svg { display: block; width: 100%; }
+.af-title {
+  text-align: center; font-size: 17px; letter-spacing: .3em; color: #f3eee2;
+  padding: 2px 0 3px;
+}
+
+textarea, select {
+  width: 100%;
+  background: rgba(5, 13, 22, .8);
+  border: 1px solid var(--line);
+  color: #d9f1fb;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 13px;
+  padding: 8px 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  resize: vertical;
+}
+textarea:focus, select:focus { outline: 1px solid var(--amber-dim); }
+select { margin-top: 8px; text-transform: uppercase; font-size: 11px; }
+select option { background: #0a1622; }
+
+.trapez {
+  display: block;
+  margin: 12px auto 0;
+  width: 62%;
+  background: #e3ab48;
+  border: none;
+  color: #2a1f08;
+  font-family: "Michroma", sans-serif;
+  font-size: 12px;
+  letter-spacing: .3em;
+  padding: 9px 0 8px;
+  clip-path: polygon(7% 0, 93% 0, 100% 100%, 0 100%);
+  cursor: pointer;
+  text-shadow: none;
+}
+.trapez:hover { filter: brightness(1.12); }
+.trapez:disabled { filter: grayscale(.6) brightness(.7); cursor: default; }
+
+.codechip {
+  margin: 10px auto 0; width: fit-content;
+  border: 1px solid var(--amber-dim);
+  color: var(--amber);
+  font-size: 8.5px; letter-spacing: .22em;
+  padding: 3px 14px;
+}
+
+/* comm row */
+.comm {
+  display: flex; align-items: center; gap: 14px;
+  border: 1px solid var(--crimson-line);
+  background: rgba(60, 16, 25, .35);
+  padding: 10px 14px;
+}
+.dial {
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 2px solid var(--amber);
+  position: relative; flex: none;
+  display: grid; place-items: center;
+}
+.dial::before {
+  content: ""; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid #8c2738;
+}
+.dial::after {
+  content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--red);
+}
+.dial.busy { animation: dialspin 1.6s linear infinite; border-style: dashed; }
+@keyframes dialspin { to { transform: rotate(360deg); } }
+
+.comm-text { flex: 1; min-width: 0; }
+.comm-text b {
+  display: block; font-size: 12px; color: #f3f8fb; letter-spacing: .18em; font-weight: normal;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.comm-text span { font-size: 8px; color: #c98e96; letter-spacing: .2em; }
+
+.chevrons { display: flex; gap: 4px; flex: none; }
+.chevrons i {
+  width: 13px; height: 20px;
+  background: var(--amber-dim);
+  clip-path: polygon(0 0, 45% 0, 100% 50%, 45% 100%, 0 100%, 55% 50%);
+  opacity: .35;
+}
+.comm.busy .chevrons i { animation: chevflow 1s infinite; }
+.comm.busy .chevrons i:nth-child(2) { animation-delay: .2s; }
+.comm.busy .chevrons i:nth-child(3) { animation-delay: .4s; }
+@keyframes chevflow { 40% { opacity: 1; background: var(--amber); } }
+
+audio {
+  width: 100%; height: 34px; margin-top: 2px;
+  filter: invert(.88) hue-rotate(165deg) saturate(.7);
+  opacity: .85;
+}
+
+/* ============================================================ terminals */
+.terms {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  padding: 4px 24px 18px;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+@media (max-width: 900px) { .terms { grid-template-columns: 1fr; } }
+.term {
+  border: 1px solid #1f5c36;
+  background: rgba(5, 16, 10, .65);
+  height: 148px;
+  padding: 8px 10px;
+  overflow: hidden;
+  position: relative;
+  font-family: "Share Tech Mono", monospace;
+  text-transform: none;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #59dd84;
+  letter-spacing: 0;
+}
+.term::before {
+  content: ""; position: absolute; right: -1px; top: 6px;
+  width: 3px; height: 18px; background: var(--green);
+}
+.term .thead { color: #8ef0ae; }
+.term .dim { color: #2c7d49; }
+.term .tx { color: #c6f7d6; }
+.term div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+
+<header class="topline">
+  <span class="idcode">UFCC-01A0421 // <b>AUDIO SYNTHESIS ARRAY</b> // MITSUBISHI-KUVAS</span>
+  <span class="idcode"><a href="/">⟵ STANDARD INTERFACE</a></span>
+  <span class="idcode" id="clock">·</span>
+</header>
+
+<main class="grid">
+
+  <!-- ==================== LEFT : SYSTEM CONTROL ==================== -->
+  <section class="col left">
+    <div class="banner">System Control Interface</div>
+
+    <div class="panel tick">
+      <div class="panel-label">Remote Systems</div>
+      <a class="redbtn" href="/#studio">Voice Synthesis</a>
+      <a class="redbtn" href="/#jobs">Task Queue</a>
+      <a class="redbtn" href="/#library">Audio Records</a>
+      <a class="redbtn" href="/#speakers">Speaker Profiles</a>
+      <a class="redbtn" href="/#plugins">Lua Automation</a>
+      <a class="redbtn" href="/#logs">Diagnostics</a>
+    </div>
+
+    <div class="panel brackets">
+      <h1 class="shipname">LLAMATTS</h1>
+      <div class="civ" id="civ">TTS:OUTE-1B-Q4KM-24K</div>
+      <div class="statuslist" id="links">
+        <div><span>Drive Link</span><b class="na">··</b></div>
+      </div>
+      <div class="mirrorbox">
+        <div class="l1">LINK MIRROR STATUS:/ <span id="mirror1">^CONFIRMED</span></div>
+        <div class="l2" id="mirror2">AWAITING TASKING</div>
+      </div>
+    </div>
+
+    <div class="bigfoot" id="linkactive">LINK ACTIVE</div>
+  </section>
+
+  <!-- ==================== CENTER : SYSTEM MONITOR ==================== -->
+  <section class="col center">
+    <div class="idcode" style="text-align:center">UFCT-01A0010</div>
+    <h1 class="montitle glow">System Monitor</h1>
+    <div class="alertbar nominal" id="alertbar">NOMINAL</div>
+
+    <div class="alertlines" id="alerts">
+      <div>&gt; All synthesis systems nominal</div>
+    </div>
+
+    <div class="tasks">
+      <div class="panel-label">Synthesis Tasks // Recent — click to replay</div>
+      <div id="tasklist"><div class="empty">&gt; no synthesis tasks logged</div></div>
+    </div>
+
+    <div class="numbers" id="numbers"></div>
+    <div class="chev">⌄</div>
+  </section>
+
+  <!-- ==================== SCHEMATIC ==================== -->
+  <section class="col schem">
+    <div class="panel">
+      <div class="panel-label">Synthesis Stack // Cutaway</div>
+      <svg viewBox="0 0 240 300" fill="none">
+        <defs>
+          <filter id="glow"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <!-- llama outline -->
+        <g stroke="#54c7e8" stroke-width="1.6" filter="url(#glow)" stroke-linejoin="round">
+          <path d="M44 142
+                   L40 132 L46 120 L58 114 L120 110 L138 104
+                   L146 64 L144 46
+                   L138 40 L140 28 L146 38
+                   L150 24 L155 36
+                   L166 34 L176 40 L178 50 L172 56 L160 58
+                   L156 70 L158 104
+                   L166 112 L170 126 L166 142
+                   L162 180 L164 216 L158 248 L164 252 L150 252 L152 216 L146 184
+                   L120 188 L94 184
+                   L90 218 L94 250 L80 250 L84 246 L80 214 L78 186
+                   L62 184 L56 160 L50 150 Z"
+                stroke-dasharray="3 2"/>
+          <!-- inner detail lines -->
+          <path d="M120 110 L118 186" stroke-dasharray="2 4" stroke-width="0.8"/>
+          <path d="M146 70 L172 56" stroke-dasharray="2 4" stroke-width="0.8"/>
+        </g>
+        <!-- callouts -->
+        <g font-family="Michroma" font-size="6.5" letter-spacing="1">
+          <g>
+            <rect x="2" y="30" width="86" height="13" fill="#87422a"/>
+            <text x="7" y="39.5" fill="#ffd9c2">PROMPT PROC</text>
+            <path d="M88 36 L140 36" stroke="#f08a4b" stroke-width="0.8" stroke-dasharray="2 2"/>
+            <circle cx="142" cy="36" r="1.6" fill="#f08a4b"/>
+          </g>
+          <g>
+            <rect x="2" y="118" width="110" height="13" fill="#87422a"/>
+            <text x="7" y="127.5" fill="#ffd9c2">TRANSFORMER 1.2B</text>
+            <path d="M112 124 L128 132" stroke="#f08a4b" stroke-width="0.8" stroke-dasharray="2 2"/>
+            <circle cx="130" cy="133" r="1.6" fill="#f08a4b"/>
+          </g>
+          <g>
+            <rect x="132" y="208" width="104" height="13" fill="#14384b" stroke="#2e7396" stroke-width="0.6"/>
+            <text x="137" y="217.5" fill="#9be8ff">DAC VOCODER 24K</text>
+            <path d="M132 214 L116 200" stroke="#54c7e8" stroke-width="0.8" stroke-dasharray="2 2"/>
+            <circle cx="114" cy="198" r="1.6" fill="#54c7e8"/>
+          </g>
+          <g>
+            <rect x="2" y="262" width="78" height="13" fill="#14384b" stroke="#2e7396" stroke-width="0.6"/>
+            <text x="7" y="271.5" fill="#9be8ff">OUTPUT BUS</text>
+            <path d="M80 268 L88 252" stroke="#54c7e8" stroke-width="0.8" stroke-dasharray="2 2"/>
+          </g>
+        </g>
+      </svg>
+      <div class="schemtable" id="modelfiles">
+        <div><span>// model files</span><span>·</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== RIGHT : SYSTEM LINK ==================== -->
+  <section class="col right">
+    <div class="banner">System Link</div>
+
+    <div class="panel tick">
+      <div class="alert-frame">
+        <svg viewBox="0 0 300 16" preserveAspectRatio="none" height="10">
+          <path d="M0 16 L40 16 L60 2 L240 2 L260 16 L300 16" stroke="#e9b44c" stroke-width="1.5" fill="none"/>
+          <circle cx="14" cy="8" r="4" fill="#e9b44c"/>
+        </svg>
+        <div class="af-title">Transmit</div>
+        <svg viewBox="0 0 300 16" preserveAspectRatio="none" height="10">
+          <path d="M0 0 L40 0 L60 14 L240 14 L260 0 L300 0" stroke="#e9b44c" stroke-width="1.5" fill="none"/>
+        </svg>
+      </div>
+
+      <textarea id="say" rows="4">Hold my juice. I am about to open this door.</textarea>
+      <select id="spk"></select>
+      <button class="trapez" id="send">Transmit</button>
+      <div class="codechip" id="gencode">Code: STANDBY-MODE</div>
+    </div>
+
+    <div class="banner">Link Connection</div>
+    <div class="comm" id="comm">
+      <div class="dial" id="dial"></div>
+      <div class="comm-text">
+        <b id="commname">COMM2101-A</b>
+        <span id="commsub">Automated Synthesis</span>
+      </div>
+      <div class="chevrons"><i></i><i></i><i></i></div>
+    </div>
+    <audio id="player" controls></audio>
+  </section>
+</main>
+
+<!-- ==================== TERMINALS ==================== -->
+<footer class="terms">
+  <div class="term" id="t1"><div class="thead">&gt; MCRN CMD.LINK/override: <span style="color:#8ef0ae">Enabled</span></div></div>
+  <div class="term" id="t2"><div class="thead">&gt; System active &gt;</div></div>
+  <div class="term" id="t3"><div class="thead">&gt; #7170144::Synthesis_Sys[]</div></div>
+</footer>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+/* ---------------- clock ---------------- */
+setInterval(() => {
+  const now = new Date();
+  $("#clock").textContent = `MCRN ${now.toISOString().slice(0,10).replaceAll("-",".")} // ${now.toTimeString().slice(0,8)}`;
+}, 1000);
+
+/* ---------------- terminals ---------------- */
+const termCaps = 8;
+function termLine(id, text, cls) {
+  const el = $(id);
+  const line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = text;
+  el.appendChild(line);
+  while (el.children.length > termCaps + 1) el.removeChild(el.children[1]);
+}
+
+/* ---------------- state ---------------- */
+const jobs = new Map();
+let watching = null;     // jobId from this console
+let status = null;
+
+/* ---------------- status / links list ---------------- */
+async function refreshStatus() {
+  try { status = await (await fetch("/api/status")).json(); } catch { return; }
+
+  const cls = v => v ? "ok" : "na";
+  const rows = [
+    ["Drive Link", status.engineState === "loaded" ? ["OK","ok"] : status.engineState === "loading" ? ["SPOOLING","ok"] : status.engineState === "failed" ? ["FAULT","bad"] : ["IDLE","na"]],
+    ["Codec Link", status.modelsReady ? ["OK","ok"] : ["NO MODELS","bad"]],
+    ["GPU Offload", status.gpuLayers > 0 ? [`${status.gpuLayers} LAYERS`,"ok"] : ["NA","na"]],
+    ["Plugin Host", (status.plugins||[]).length ? [`${[...status.plugins].length} LOADED`,"ok"] : ["NONE","na"]],
+    ["Speaker Bank", [`${(status.speakers||[]).length} PROFILES`,"ok"]],
+    ["Task Queue", status.queued > 0 ? [`${status.queued} ACTIVE`,"good"] : ["CLEAR","ok"]],
+  ];
+  $("#links").innerHTML = rows.map(([k,[v,c]]) =>
+    `<div><span>${k}</span><b class="${c}">${v}</b></div>`).join("");
+
+  $("#civ").textContent = "TTS:" + (status.model || "OUTE-1B").replace(/\.gguf$/i,"").replaceAll("-",".").toUpperCase().slice(0,26);
+
+  const sel = $("#spk");
+  const names = status.speakers || ["default"];
+  if ([...sel.options].map(o => o.value).join("|") !== names.join("|")) {
+    const cur = sel.value;
+    sel.innerHTML = names.map(n => `<option value="${esc(n)}">VOICE PROFILE // ${esc(n)}</option>`).join("");
+    if (names.includes(cur)) sel.value = cur;
+  }
+}
+
+/* ---------------- stats / numbers / model files ---------------- */
+async function refreshStats() {
+  let st;
+  try { st = await (await fetch("/api/stats")).json(); } catch { return; }
+  const fmt = v => v == null ? "··" : v;
+  const num = (val, lab) => `<div class="numcluster"><div class="nval">${val}</div><div class="nlab">${lab}</div></div>`;
+  $("#numbers").innerHTML =
+    num(fmt(st.tokensPerSec), "TOK/SEC") +
+    num((st.totalAudioSeconds/60).toFixed(1), "MIN AUDIO") +
+    num(st.totalJobsDone, "TASKS DONE") +
+    num(st.memoryMb, "MEM MB") +
+    num(Math.floor(st.uptimeSeconds/60), "UPTIME MIN");
+
+  $("#modelfiles").innerHTML = `<div><span>// model files</span><span>MB</span></div>` +
+    (st.modelFiles||[]).map(f => `<div><span>${esc(f.name.slice(0,26))}</span><span>${f.mb}</span></div>`).join("");
+}
+
+/* ---------------- task list ---------------- */
+const statusText = { done: "COMPLETE", running: "ACTIVE", queued: "QUEUED", error: "FAULT", cancelled: "ABORTED" };
+
+function renderMatrix() {
+  const list = [...jobs.values()].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8);
+  const box = $("#tasklist");
+  if (list.length === 0) return;
+  box.innerHTML = "";
+  for (const j of list) {
+    const err = j.status === "error" || j.status === "cancelled";
+    const running = j.status === "running";
+    const playable = j.status === "done" && j.outputFile;
+    const row = document.createElement("div");
+    row.className = "task-row" + (err ? " err" : "") + (running ? " run" : "") + (playable ? " playable" : "");
+    const desc = (j.description || "").replace(/^web: /, "").replace(/^"|"$/g, "");
+    row.innerHTML = `
+      <span class="cell ${err ? "hot" : running ? "on blink" : j.status === "done" ? "on" : "dim"}"></span>
+      <span class="tid">#${j.id.slice(0,6)}</span>
+      <span class="tdesc">${esc(desc)}</span>
+      <span class="tdur">${j.seconds ? j.seconds.toFixed(1) + "s" : running ? "···" : "—"}</span>
+      <span class="tstat">${statusText[j.status] || j.status.toUpperCase()}</span>`;
+    if (playable) row.addEventListener("click", () => {
+      const player = $("#player");
+      player.src = "/api/audio/" + encodeURIComponent(j.outputFile);
+      player.play().catch(() => {});
+      $("#commname").textContent = `TASK ${j.id.slice(0,6).toUpperCase()} // REPLAY`;
+      $("#commsub").textContent = `${(j.seconds||0).toFixed(1)}s rendered`;
+    });
+    box.appendChild(row);
+  }
+}
+
+/* ---------------- alerts ---------------- */
+const alertLines = [];
+function pushAlert(text, cls) {
+  alertLines.unshift({ text, cls });
+  if (alertLines.length > 5) alertLines.pop();
+  $("#alerts").innerHTML = alertLines.map(a => `<div class="${a.cls||""}">&gt; ${esc(a.text)}</div>`).join("");
+}
+
+function updateAlertBar() {
+  const running = [...jobs.values()].some(j => j.status === "running");
+  const bar = $("#alertbar");
+  if (running) { bar.textContent = "SYNTHESIS IN PROGRESS"; bar.classList.remove("nominal"); }
+  else { bar.textContent = "NOMINAL"; bar.classList.add("nominal"); }
+}
+
+/* ---------------- comm / transmit ---------------- */
+function setBusy(busy, label) {
+  $("#dial").classList.toggle("busy", busy);
+  $("#comm").classList.toggle("busy", busy);
+  if (label) $("#commname").textContent = label;
+  $("#send").disabled = busy;
+}
+
+$("#send").addEventListener("click", async () => {
+  const text = $("#say").value.trim();
+  if (!text) return;
+  try {
+    const r = await (await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, speaker: $("#spk").value, label: "console" }),
+    })).json();
+    watching = r.jobId;
+    $("#gencode").textContent = `Code: TASK-${r.jobId.slice(0,6).toUpperCase()}`;
+    $("#mirror2").textContent = "INITIATING SYNTHESIS HANDSHAKE";
+    setBusy(true, `TASK ${r.jobId.slice(0,6).toUpperCase()}`);
+    pushAlert(`Synthesis tasked: "${text.slice(0, 48)}${text.length > 48 ? "…" : ""}"`);
+  } catch {
+    pushAlert("Transmit failed — link error", "err");
+  }
+});
+
+/* ---------------- SSE ---------------- */
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onopen = () => {
+    const el = $("#linkactive");
+    el.textContent = "LINK ACTIVE"; el.classList.remove("lost");
+    $("#mirror1").textContent = "^CONFIRMED";
+  };
+  es.onerror = () => {
+    const el = $("#linkactive");
+    el.textContent = "LINK LOST"; el.classList.add("lost");
+    $("#mirror1").textContent = "^SEVERED";
+  };
+  es.addEventListener("log", e => {
+    const d = JSON.parse(e.data);
+    const text = `> ${d.message}`;
+    if (d.level === "warn" || d.level === "error") {
+      termLine("#t3", text, d.level === "error" ? "tx" : "");
+      pushAlert(d.message, d.level === "error" ? "err" : "warn");
+    } else {
+      termLine("#t1", text, Math.random() < .3 ? "dim" : "");
+    }
+  });
+  es.addEventListener("job", e => {
+    const j = JSON.parse(e.data);
+    const prev = jobs.get(j.id);
+    jobs.set(j.id, j);
+    renderMatrix();
+    updateAlertBar();
+
+    if (j.status === "running" && j.detail)
+      termLine("#t2", `> #${j.id.slice(0,7)}::${j.detail.replaceAll(" ","_")}`, "dim");
+    if ((!prev || prev.status !== j.status) && (j.status === "done" || j.status === "error")) {
+      termLine("#t2", `> #${j.id.slice(0,7)}::${j.status === "done" ? "Task_Complete[]" : "Task_Fault[x]"}`, j.status === "done" ? "tx" : "");
+      if (j.status === "error") pushAlert(`Task ${j.id.slice(0,6)} fault: ${j.error || "unknown"}`, "err");
+    }
+
+    if (j.id === watching) {
+      if (j.status === "done" && j.outputFile) {
+        setBusy(false, `TASK ${j.id.slice(0,6).toUpperCase()} // COMPLETE`);
+        $("#commsub").textContent = `${(j.seconds||0).toFixed(1)}s rendered`;
+        $("#mirror2").textContent = "SYNTHESIS COMPLETE";
+        $("#gencode").textContent = "Code: STANDBY-MODE";
+        const player = $("#player");
+        player.src = "/api/audio/" + encodeURIComponent(j.outputFile);
+        player.play().catch(() => {});
+        watching = null;
+      } else if (j.status === "error" || j.status === "cancelled") {
+        setBusy(false, "COMM2101-A");
+        $("#mirror2").textContent = "SYNTHESIS FAULT";
+        $("#gencode").textContent = "Code: STANDBY-MODE";
+        watching = null;
+      }
+    }
+  });
+}
+
+/* ---------------- bootstrap ---------------- */
+async function bootstrap() {
+  try {
+    const list = await (await fetch("/api/jobs")).json();
+    for (const j of list) jobs.set(j.id, j);
+    renderMatrix();
+    updateAlertBar();
+  } catch {}
+  try {
+    const logs = await (await fetch("/api/logs?after=0")).json();
+    for (const d of logs.slice(-6)) termLine("#t1", `> ${d.message}`, "dim");
+  } catch {}
+  refreshStatus();
+  refreshStats();
+  connect();
+  setInterval(() => { refreshStatus(); refreshStats(); }, 4000);
+  termLine("#t2", "> Scanning Pinnace-class synthesis array…", "dim");
+  termLine("#t3", "> #1220992::Codec/Lock_Active[x]", "dim");
+}
+bootstrap();
+</script>
+</body>
+</html>

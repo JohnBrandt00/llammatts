@@ -78,6 +78,7 @@ public sealed class TtsEngine : IDisposable
             ContextSize = (uint)contextSize,
             GpuLayerCount = gpuLayerCount,
             BatchSize = 1024,
+            FlashAttention = true, // llama.cpp ignores it where unsupported; helps on CUDA
         };
         if (threads.HasValue) parameters.Threads = threads;
 

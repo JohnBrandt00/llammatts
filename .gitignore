@@ -12,3 +12,6 @@ data/
 
 # third-party reference sources (OuteTTS python files used while porting)
 reference/
+
+# local verification scratch
+.smoke/

@@ -7,6 +7,63 @@ using LlamaTts.Core.Engine;
 using LlamaTts.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 
+// Prefer the CUDA build of llama.cpp when an NVIDIA GPU is present. LLamaSharp 0.27's
+// auto-detection only accepts CUDA *12* drivers, so newer CUDA 13-era drivers make it
+// skip the cuda12 binaries it ships with — pin them explicitly instead (they run fine
+// on newer drivers thanks to driver backward compatibility). If loading still fails,
+// auto-fallback returns to the bundled CPU build.
+var nativeConfig = LLama.Native.NativeLibraryConfig.All
+    .WithCuda()
+    .WithAutoFallback()
+    .WithLogCallback((level, message) => Console.Error.Write($"[llama-native {level}] {message}"));
+
+var cudaDir = Path.Combine(AppContext.BaseDirectory, "runtimes", "win-x64", "native", "cuda12");
+if (OperatingSystem.IsWindows() && File.Exists(Path.Combine(cudaDir, "llama.dll")) &&
+    System.Runtime.InteropServices.NativeLibrary.TryLoad("nvcuda.dll", out var nvcuda))
+{
+    System.Runtime.InteropServices.NativeLibrary.Free(nvcuda);
+
+    // ggml-cuda.dll needs the CUDA runtime (cudart/cublas), which LLamaSharp does not bundle.
+    // We look for the DLLs in <repo>/data/cuda (scripts/get-cuda-runtime.ps1 puts them there);
+    // when absent we still try, which works if a CUDA Toolkit is on PATH.
+    static string? FindCudaRuntimeDir(string start)
+    {
+        for (var d = new DirectoryInfo(start); d is not null; d = d.Parent)
+            if (File.Exists(Path.Combine(d.FullName, "LlamaTts.sln")))
+            {
+                var dir = Path.Combine(d.FullName, "data", "cuda");
+                return File.Exists(Path.Combine(dir, "cudart64_12.dll")) ? dir : null;
+            }
+        return null;
+    }
+
+    if (FindCudaRuntimeDir(AppContext.BaseDirectory) is string runtimeDir)
+        foreach (var dll in new[] { "cudart64_12.dll", "cublasLt64_12.dll", "cublas64_12.dll" })
+            System.Runtime.InteropServices.NativeLibrary.TryLoad(Path.Combine(runtimeDir, dll), out _);
+
+    // ggml.dll links ggml-cpu.dll too, which only ships in the CPU-backend folders.
+    var nativeRoot = Path.Combine(AppContext.BaseDirectory, "runtimes", "win-x64", "native");
+    foreach (var variant in new[] { "avx512", "avx2", "avx", "noavx" })
+        if (System.Runtime.InteropServices.NativeLibrary.TryLoad(Path.Combine(nativeRoot, variant, "ggml-cpu.dll"), out _))
+            break;
+
+    // Pre-load the whole CUDA chain in dependency order; once these modules are in the
+    // process, the Windows loader resolves ggml.dll/llama.dll imports against them.
+    var loadedAll = true;
+    foreach (var dll in new[] { "ggml-base.dll", "ggml-cuda.dll", "ggml.dll", "llama.dll" })
+    {
+        if (!System.Runtime.InteropServices.NativeLibrary.TryLoad(Path.Combine(cudaDir, dll), out _))
+        {
+            Console.Error.WriteLine($"[llama-native] CUDA preload failed at {dll}; staying on CPU backend " +
+                "(missing CUDA runtime? run scripts\\get-cuda-runtime.ps1)");
+            loadedAll = false;
+            break;
+        }
+    }
+    if (loadedAll)
+        nativeConfig.WithLibrary(Path.Combine(cudaDir, "llama.dll"), null);
+}
+
 var startedAt = DateTime.Now;
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +104,8 @@ app.MapGet("/api/status", () => Results.Ok(new
     engineError = tts.EngineError,
     quant = tts.Quant,
     gpuLayers = tts.GpuLayers,
+    model = tts.GgufSpec.LocalFileName,
+    maxCloneSeconds = tts.MaxCloneSeconds,
     queued = jobs.QueuedCount,
     rootDir = tts.RootDir,
     downloads = tts.Downloader.Progress,
@@ -249,7 +308,11 @@ app.MapPost("/api/speakers/clone", async (HttpRequest request) =>
     if (string.IsNullOrWhiteSpace(name)) name = Path.GetFileNameWithoutExtension(file.FileName);
     name = LlamaTts.Core.Scripting.LuaPluginHost.SanitizeName(name);
 
-    var tempPath = Path.Combine(Path.GetTempPath(), $"llamatts-clone-{Guid.NewGuid():N}.wav");
+    var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+    if (ext is not (".wav" or ".mp3"))
+        return Results.BadRequest(new { error = "unsupported format — upload a .wav or .mp3 file" });
+
+    var tempPath = Path.Combine(Path.GetTempPath(), $"llamatts-clone-{Guid.NewGuid():N}{ext}");
     await using (var fs = File.Create(tempPath))
         await file.CopyToAsync(fs);
 

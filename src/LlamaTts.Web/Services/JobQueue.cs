@@ -313,7 +313,7 @@ public sealed class JobWorker : BackgroundService
         job.Detail = "encoding reference audio...";
         _queue.NotifyChanged(job);
         var codec = _app.GetCodec();
-        var speaker = SpeakerFactory.CreateFromWavFile(job.CloneAudioPath!, job.CloneTranscript!, codec);
+        var speaker = SpeakerFactory.CreateFromFile(job.CloneAudioPath!, job.CloneTranscript!, codec, maxSeconds: _app.MaxCloneSeconds);
         ct.ThrowIfCancellationRequested();
 
         var savePath = Path.Combine(_app.SpeakersDir, job.CloneName! + ".json");

@@ -21,6 +21,10 @@ public sealed class TtsAppService : ILuaAppContext, IDisposable
     public string Quant { get; }
     public int GpuLayers { get; }
     public int ContextSize { get; }
+    public double MaxCloneSeconds { get; }
+
+    /// <summary>The GGUF to download/run — the default OuteTTS 1.0 1B quant, or a custom LlamaTts:ModelUrl.</summary>
+    public ModelFileSpec GgufSpec { get; }
 
     public ModelDownloader Downloader { get; }
     public LuaPluginHost PluginHost { get; }
@@ -55,10 +59,21 @@ public sealed class TtsAppService : ILuaAppContext, IDisposable
         GpuLayers = int.TryParse(config["LlamaTts:GpuLayers"], out var g) ? g : 0;
         ContextSize = int.TryParse(config["LlamaTts:ContextSize"], out var c) ? c : 8192;
 
+        var maxClone = double.TryParse(config["LlamaTts:MaxCloneSeconds"], out var m) ? m : SpeakerFactory.MaxSeconds;
+        MaxCloneSeconds = Math.Clamp(maxClone, 3, SpeakerFactory.HardMaxSeconds(ContextSize));
+
+        var modelUrl = config["LlamaTts:ModelUrl"];
+        GgufSpec = !string.IsNullOrWhiteSpace(modelUrl)
+            ? new ModelFileSpec(
+                config["LlamaTts:ModelFile"] ?? Path.GetFileName(new Uri(modelUrl).LocalPath),
+                modelUrl,
+                config["LlamaTts:ModelFile"] ?? Path.GetFileName(new Uri(modelUrl).LocalPath))
+            : ModelDownloader.Gguf(Quant);
+
         Downloader = new ModelDownloader(ModelsDir);
         PluginHost = new LuaPluginHost(this);
 
-        Log("info", $"Data root: {RootDir}  (model quant: {Quant}, gpu layers: {GpuLayers})");
+        Log("info", $"Data root: {RootDir}  (model: {GgufSpec.LocalFileName}, gpu layers: {GpuLayers}, max clone: {MaxCloneSeconds:F0}s)");
     }
 
     private static string FindRootDir(string contentRoot)
@@ -77,7 +92,7 @@ public sealed class TtsAppService : ILuaAppContext, IDisposable
     // ------------------------------------------------------------- model state
 
     public bool ModelsReady =>
-        Downloader.Exists(ModelDownloader.Gguf(Quant)) &&
+        Downloader.Exists(GgufSpec) &&
         Downloader.Exists(ModelDownloader.DacDecoder) &&
         Downloader.Exists(ModelDownloader.DacEncoder);
 
@@ -88,7 +103,7 @@ public sealed class TtsAppService : ILuaAppContext, IDisposable
     {
         await Downloader.EnsureAsync(ModelDownloader.DacDecoder, ct);
         await Downloader.EnsureAsync(ModelDownloader.DacEncoder, ct);
-        await Downloader.EnsureAsync(ModelDownloader.Gguf(Quant), ct);
+        await Downloader.EnsureAsync(GgufSpec, ct);
         Log("info", "All model files downloaded.");
     }
 
@@ -122,7 +137,7 @@ public sealed class TtsAppService : ILuaAppContext, IDisposable
             try
             {
                 _engineState = "loading";
-                var ggufPath = Downloader.PathFor(ModelDownloader.Gguf(Quant));
+                var ggufPath = Downloader.PathFor(GgufSpec);
                 Log("info", $"Loading {Path.GetFileName(ggufPath)} (llama.cpp)... this can take a minute");
                 var engine = TtsEngine.Load(ggufPath, ContextSize, GpuLayers);
                 var codec = GetCodecForPipeline();

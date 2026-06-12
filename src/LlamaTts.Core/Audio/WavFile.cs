@@ -18,12 +18,18 @@ public static class WavFile
         return Read(fs);
     }
 
+    // Chunk ids are 4 raw ASCII bytes; BinaryReader.ReadChars would run them through the
+    // UTF-8 decoder, which throws on binary metadata some encoders embed (seen with
+    // ElevenLabs exports). Read bytes instead.
+    private static string ChunkId(BinaryReader br) =>
+        System.Text.Encoding.ASCII.GetString(br.ReadBytes(4));
+
     public static WavData Read(Stream stream)
     {
         using var br = new BinaryReader(stream);
-        if (new string(br.ReadChars(4)) != "RIFF") throw new InvalidDataException("Not a RIFF file");
+        if (ChunkId(br) != "RIFF") throw new InvalidDataException("Not a RIFF file");
         br.ReadInt32(); // riff size
-        if (new string(br.ReadChars(4)) != "WAVE") throw new InvalidDataException("Not a WAVE file");
+        if (ChunkId(br) != "WAVE") throw new InvalidDataException("Not a WAVE file");
 
         short format = 0, channels = 0, bitsPerSample = 0;
         int sampleRate = 0;
@@ -31,7 +37,7 @@ public static class WavFile
 
         while (br.BaseStream.Position + 8 <= br.BaseStream.Length)
         {
-            var chunkId = new string(br.ReadChars(4));
+            var chunkId = ChunkId(br);
             int chunkSize = br.ReadInt32();
             long next = br.BaseStream.Position + chunkSize + (chunkSize % 2);
 
@@ -128,9 +134,9 @@ public static class WavFile
         {
             using var fs = File.OpenRead(path);
             using var br = new BinaryReader(fs);
-            if (new string(br.ReadChars(4)) != "RIFF") return null;
+            if (ChunkId(br) != "RIFF") return null;
             br.ReadInt32();
-            if (new string(br.ReadChars(4)) != "WAVE") return null;
+            if (ChunkId(br) != "WAVE") return null;
 
             short channels = 0, bits = 0;
             int rate = 0;
@@ -138,7 +144,7 @@ public static class WavFile
 
             while (fs.Position + 8 <= fs.Length)
             {
-                var id = new string(br.ReadChars(4));
+                var id = ChunkId(br);
                 int size = br.ReadInt32();
                 long next = fs.Position + size + (size % 2);
                 if (id == "fmt ")

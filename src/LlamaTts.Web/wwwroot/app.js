@@ -160,6 +160,9 @@ async function refreshStatus() {
         <div class="progressbar"><div style="width:${d.percent}%"></div></div>
       </div>`).join("");
 
+  const limit = $("#clone-limit");
+  if (limit && s.maxCloneSeconds) limit.textContent = Math.round(s.maxCloneSeconds);
+
   syncSpeakerSelects(s.speakers || ["default"]);
 }
 
@@ -891,4 +894,9 @@ connectSse();
 refreshStatus();
 fetchLogs();
 fetchJobs();
+
+// deep links like /#studio (used by the MCRN console page)
+const hashTab = location.hash.replace("#", "");
+if (hashTab && document.getElementById("tab-" + hashTab)) switchTab(hashTab);
+
 refreshTab(true);
